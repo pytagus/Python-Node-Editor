@@ -2,7 +2,7 @@
 
 A flexible visual programming environment that lets you create, connect, and execute Python code nodes in an intuitive graphical interface.
 
-![Python Node Editor Screenshot](screenshot.png)
+![Python Node Editor Screenshot](pythonnodeeditor.png)
 
 ## Features
 
