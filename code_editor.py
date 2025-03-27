@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QTextEdit, QWidget, QVBoxLayout
-from PySide6.QtGui import QColor, QTextCharFormat, QFont, QSyntaxHighlighter
+from PySide6.QtGui import QColor, QTextCharFormat, QFont, QSyntaxHighlighter, QKeySequence
 from PySide6.QtCore import QRegularExpression, Qt
 
 class PythonHighlighter(QSyntaxHighlighter):
@@ -85,6 +85,27 @@ class CodeEditor(QTextEdit):
         
         # Set tab width
         self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance(' '))
+        
+        # Activer explicitement les raccourcis standard pour assurer leur fonctionnement sur toutes les plateformes
+        self.setUndoRedoEnabled(True)
+        
+        # S'assurer que le widget peut recevoir le focus pour les événements clavier
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        
+    def keyPressEvent(self, event):
+        """Surcharge pour s'assurer que les raccourcis clavier standards fonctionnent correctement"""
+        # Vérifier si c'est un raccourci standard
+        if event.matches(QKeySequence.StandardKey.Copy) or \
+           event.matches(QKeySequence.StandardKey.Paste) or \
+           event.matches(QKeySequence.StandardKey.Cut) or \
+           event.matches(QKeySequence.StandardKey.SelectAll) or \
+           event.matches(QKeySequence.StandardKey.Undo) or \
+           event.matches(QKeySequence.StandardKey.Redo):
+            # Utiliser l'implémentation standard de QTextEdit
+            super().keyPressEvent(event)
+        else:
+            # Pour les autres touches, comportement normal
+            super().keyPressEvent(event)
 
 
 class CodeEditorWidget(QWidget):

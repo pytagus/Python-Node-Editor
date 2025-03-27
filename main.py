@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QLabel, QDockWidget
 )
 from PySide6.QtCore import Qt, QPointF, QSettings, QTimer
-from PySide6.QtGui import QMouseEvent, QPainter, QAction, QFont, QColor, QKeyEvent
+from PySide6.QtGui import QMouseEvent, QPainter, QAction, QFont, QColor, QKeyEvent, QKeySequence
 
 from node import NodeItem, PortItem, ViewerNodeItem # Import NodeItem and PortItem
 from connection import ConnectionItem # Import ConnectionItem
@@ -129,22 +129,26 @@ class NodeCanvas(QGraphicsView):
     
     def keyPressEvent(self, event: QKeyEvent):
         """Handle key press events"""
-        # Check if any widget in the scene has focus (like a text editor)
-        # If a widget has focus, let it handle the key event
-        focused_widget = QApplication.focusWidget()
-        if focused_widget and not isinstance(focused_widget, QGraphicsView):
-            # Let the focused widget handle the key event
-            super().keyPressEvent(event)
-            return
+        # Vérification directe: sommes-nous en train d'éditer le code d'un nœud?
+        # On parcourt tous les nœuds pour voir si leur éditeur est visible
+        for node in self.scene().items():
+            if isinstance(node, NodeItem):
+                if node.is_expanded and node.code_editor_proxy.isVisible():
+                    # Si nous éditons un nœud, transmettre l'événement
+                    super().keyPressEvent(event)
+                    return
+        
+        # Si on arrive ici, aucun nœud n'est en édition
+        # Donc on peut gérer les raccourcis de copier-coller pour les nœuds
         
         # Copier - Ctrl+C
-        if event.modifiers() == Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_C:
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_C:
             self.copy_selected_nodes()
             event.accept()
             return
             
         # Coller - Ctrl+V
-        if event.modifiers() == Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_V:
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_V:
             self.paste_nodes()
             event.accept()
             return
