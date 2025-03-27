@@ -436,3 +436,87 @@ class NodeItem(QGraphicsItem):
         node.set_code(data['code'])
         scene.addItem(node)
         return node
+    
+
+class ViewerNodeItem(NodeItem):
+    """Node spécialisé pour visualiser les données"""
+    def __init__(self, title="Viewer", parent=None):
+        super().__init__(title, parent)
+        
+        # Changer la couleur pour identifier les nœuds visualiseurs
+        self.color = QColor("#9C27B0")  # Violet
+        self.pen_default = QPen(QColor("#7B1FA2"), 1.5)  # Violet plus foncé
+        self.pen_hover = QPen(QColor("#BA68C8"), 1.5)  # Violet plus clair
+        
+        # Zone de texte pour afficher les données
+        self.data_display = QGraphicsTextItem(self)
+        self.data_display.setPos(10, self.title_height + 30)
+        self.data_display.setDefaultTextColor(QColor("#000000"))
+        self.data_display.setFont(QFont("Courier New", 9))
+        self.data_display.setPlainText("No data received yet")
+        
+        # Définir le code par défaut pour un nœud visualiseur
+        self.set_code("""# Viewer Node
+def process(input=None):
+    # Ce nœud passe simplement les données reçues
+    return input
+""")
+    
+    def execute_code(self):
+        """Exécute le code et met à jour l'affichage des données"""
+        result = super().execute_code()
+        
+        # Mettre à jour l'affichage avec la représentation des données
+        if result is not None:
+            # Limiter la taille de l'affichage pour éviter les performances lentes
+            result_str = str(result)
+            if len(result_str) > 1000:  # Limiter à 1000 caractères
+                result_str = result_str[:997] + "..."
+            
+            # Formatter les données selon leur type
+            if isinstance(result, dict):
+                formatted_result = "Dict:\n"
+                for key, value in result.items():
+                    formatted_result += f"  {key}: {value}\n"
+                self.data_display.setPlainText(formatted_result)
+            elif isinstance(result, list):
+                formatted_result = f"List[{len(result)}]:\n"
+                for i, item in enumerate(result):
+                    if i >= 20:  # Limiter à 20 éléments
+                        formatted_result += "  ...\n"
+                        break
+                    formatted_result += f"  {i}: {item}\n"
+                self.data_display.setPlainText(formatted_result)
+            else:
+                self.data_display.setPlainText(f"Data: {result_str}")
+        else:
+            self.data_display.setPlainText("No data received")
+        
+        return result
+    
+    def toggle_expanded(self):
+        """Override pour gérer l'affichage des données lors du toggle"""
+        super().toggle_expanded()
+        
+        # Ajuster l'affichage des données selon l'état du nœud
+        if self.is_expanded:
+            # Quand le nœud est étendu, cacher l'affichage des données car on voit le code
+            self.data_display.setVisible(False)
+        else:
+            # Quand le nœud est réduit, montrer l'affichage des données
+            self.data_display.setVisible(True)
+            
+    def to_dict(self):
+        """Serializer avec le type de nœud"""
+        data = super().to_dict()
+        data['node_type'] = 'viewer'  # Ajouter un identifiant de type
+        return data
+    
+    @classmethod
+    def from_dict(cls, data, scene):
+        """Créer un nœud visualiseur à partir des données sérialisées"""
+        node = cls(data['title'])
+        node.setPos(data['pos_x'], data['pos_y'])
+        node.set_code(data['code'])
+        scene.addItem(node)
+        return node

@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QPointF, QSettings, QTimer
 from PySide6.QtGui import QMouseEvent, QPainter, QAction, QFont, QColor, QKeyEvent
 
-from node import NodeItem, PortItem # Import NodeItem and PortItem
+from node import NodeItem, PortItem, ViewerNodeItem # Import NodeItem and PortItem
 from connection import ConnectionItem # Import ConnectionItem
 
 class NodeCanvas(QGraphicsView):
@@ -174,7 +174,8 @@ class NodeCanvas(QGraphicsView):
                 'rel_x': node.pos().x(),  # Position relative
                 'rel_y': node.pos().y(),
                 'original_id': id(node),  # Stocker l'ID original pour référence
-                'connections': []  # Sera rempli avec les connexions
+                'connections': [],  # Sera rempli avec les connexions
+                'is_viewer': isinstance(node, ViewerNodeItem)  # Conserver le type de nœud
             }
             self.copied_nodes.append(node_data)
             node_id_to_index[id(node)] = i
@@ -211,8 +212,9 @@ class NodeCanvas(QGraphicsView):
         if hasattr(main_window, 'console_output'):
             # Compter le nombre total de connexions copiées
             connection_count = sum(len(node_data['connections']) for node_data in self.copied_nodes)
+            viewer_count = sum(1 for node_data in self.copied_nodes if node_data['is_viewer'])
             main_window.console_output.append_output(
-                f"Copied {len(self.copied_nodes)} node(s) with {connection_count} connection(s)", "#2196F3"
+                f"Copied {len(self.copied_nodes)} node(s) ({viewer_count} viewer(s)) with {connection_count} connection(s)", "#2196F3"
             )
     
     def paste_nodes(self):
@@ -243,8 +245,11 @@ class NodeCanvas(QGraphicsView):
         
         # Première étape : créer tous les nœuds
         for node_data in self.copied_nodes:
-            # Créer un nouveau nœud
-            new_node = NodeItem(node_data['title'])
+            # Créer le bon type de nœud selon si c'est un visualiseur ou non
+            if node_data.get('is_viewer', False):
+                new_node = ViewerNodeItem(node_data['title'])
+            else:
+                new_node = NodeItem(node_data['title'])
             
             # Configurer le nœud
             new_node.set_code(node_data['code'])
@@ -295,8 +300,9 @@ class NodeCanvas(QGraphicsView):
         
         # Log to console if available
         if hasattr(main_window, 'console_output'):
+            viewer_count = sum(1 for node_data in self.copied_nodes if node_data.get('is_viewer', False))
             main_window.console_output.append_output(
-                f"Pasted {len(new_nodes)} node(s) with {connection_count} connection(s)", "#4CAF50"
+                f"Pasted {len(new_nodes)} node(s) ({viewer_count} viewer(s)) with {connection_count} connection(s)", "#4CAF50"
             )
     
     def mouseReleaseEvent(self, event: QMouseEvent):
@@ -382,6 +388,11 @@ class MainWindow(QMainWindow):
         self.add_node_action = QAction("Add Node", self)
         self.add_node_action.triggered.connect(self.add_node)
         self.toolbar.addAction(self.add_node_action)
+
+        # Add viewer node button
+        self.add_viewer_action = QAction("Add Viewer", self)
+        self.add_viewer_action.triggered.connect(self.add_viewer_node)
+        self.toolbar.addAction(self.add_viewer_action)
 
         # Execute button
         self.execute_action = QAction("Execute", self)
@@ -504,6 +515,30 @@ class MainWindow(QMainWindow):
             
         self.nodes.append(node)
         return node
+    
+    def add_viewer_node(self):
+        """Ajoute un nœud visualiseur au graphe"""
+        viewer = ViewerNodeItem(f"Viewer {len([n for n in self.nodes if isinstance(n, ViewerNodeItem)]) + 1}")
+        self.scene.addItem(viewer)
+        
+        # Positionner le nœud visualiseur à droite du canvas
+        view_rect = self.canvas.viewport().rect()
+        scene_pos = self.canvas.mapToScene(view_rect.width() - 250, 100 + len(self.nodes) * 60)
+        viewer.setPos(scene_pos)
+        
+        # S'assurer que le nœud est en état réduit
+        if viewer.is_expanded:
+            viewer.toggle_expanded()
+            
+        self.nodes.append(viewer)
+        
+        # Log dans la console
+        self.console_output.append_output(
+            f"Viewer node '{viewer.title}' added",
+            "#9C27B0"  # Violet, comme la couleur du nœud
+        )
+        
+        return viewer
     
     def toggle_auto_execute(self, checked):
         """Activer ou désactiver l'exécution automatique"""
@@ -679,8 +714,12 @@ class MainWindow(QMainWindow):
             
             # Créer les nouveaux nœuds
             for node_data in graph_data['nodes']:
-                # Créer un nouveau nœud avec les données importées
-                new_node = NodeItem(node_data['title'])
+                # Vérifier si c'est un nœud visualiseur
+                if 'node_type' in node_data and node_data['node_type'] == 'viewer':
+                    new_node = ViewerNodeItem(node_data['title'])
+                else:
+                    new_node = NodeItem(node_data['title'])
+                    
                 new_node.set_code(node_data['code'])
                 new_node.setPos(node_data['pos_x'] + offset_x, node_data['pos_y'] + offset_y)
                 
@@ -740,7 +779,12 @@ class MainWindow(QMainWindow):
         
         # Create nodes
         for node_data in data['nodes']:
-            node = NodeItem.from_dict(node_data, self.scene)
+            # Vérifier si c'est un nœud visualiseur
+            if 'node_type' in node_data and node_data['node_type'] == 'viewer':
+                node = ViewerNodeItem.from_dict(node_data, self.scene)
+            else:
+                node = NodeItem.from_dict(node_data, self.scene)
+                
             self.nodes.append(node)
             nodes_dict[node_data['id']] = node
         
